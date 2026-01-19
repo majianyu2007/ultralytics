@@ -1548,6 +1548,10 @@ def parse_model(d, ch, verbose=True):
     if verbose:
         LOGGER.info(f"\n{'':>3}{'from':>20}{'n':>3}{'params':>10}  {'module':<45}{'arguments':<30}")
     ch = [ch]
+    ch0 = ch[0]  # original input channels (used for dual-stream -4 input)
+
+    def _ch(idx: int):
+        return ch0 if idx == -4 else ch[idx]
     layers, save, c2 = [], [], ch[-1]  # layers, savelist, ch out
     base_modules = frozenset(
         {
@@ -1620,7 +1624,8 @@ def parse_model(d, ch, verbose=True):
                     args[j] = locals()[a] if a in locals() else ast.literal_eval(a)
         n = n_ = max(round(n * depth), 1) if n > 1 else n  # depth gain
         if m in base_modules:
-            c1, c2 = ch[f], args[0]
+            c1 = _ch(f) if isinstance(f, int) else _ch(f[0])
+            c2 = args[0]
             if c2 != nc:  # if c2 != nc (e.g., Classify() output)
                 c2 = make_divisible(min(c2, max_channels) * width, 8)
             if m is C2fAttn:  # set 1) embed channels and 2) num heads
@@ -1652,20 +1657,20 @@ def parse_model(d, ch, verbose=True):
         elif m is ResNetLayer:
             c2 = args[1] if args[3] else args[1] * 4
         elif m is torch.nn.BatchNorm2d:
-            args = [ch[f]]
+            args = [_ch(f)]
         elif m is Concat:
-            c2 = sum(ch[x] for x in f)
+            c2 = sum(_ch(x) for x in f)
         elif m is Add:
             f0 = f[0] if isinstance(f, list) else f
-            c2 = ch[f0]
+            c2 = _ch(f0)
             args = [c2]
         elif m is Add2:
             f0 = f[0] if isinstance(f, list) else f
-            c2 = ch[f0]
+            c2 = _ch(f0)
             args = [c2, args[1]]
         elif m is GPT:
             f0 = f[0] if isinstance(f, list) else f
-            c2 = ch[f0]
+            c2 = _ch(f0)
             args = [c2]
         elif m in frozenset(
             {
@@ -1682,29 +1687,29 @@ def parse_model(d, ch, verbose=True):
                 OBB26,
             }
         ):
-            args.extend([reg_max, end2end, [ch[x] for x in f]])
+            args.extend([reg_max, end2end, [_ch(x) for x in f]])
             if m is Segment or m is YOLOESegment or m is Segment26 or m is YOLOESegment26:
                 args[2] = make_divisible(min(args[2], max_channels) * width, 8)
             if m in {Detect, YOLOEDetect, Segment, Segment26, YOLOESegment, YOLOESegment26, Pose, Pose26, OBB, OBB26}:
                 m.legacy = legacy
         elif m is v10Detect:
-            args.append([ch[x] for x in f])
+            args.append([_ch(x) for x in f])
         elif m is ImagePoolingAttn:
-            args.insert(1, [ch[x] for x in f])  # channels as second arg
+            args.insert(1, [_ch(x) for x in f])  # channels as second arg
         elif m is RTDETRDecoder:  # special case, channels arg must be passed in index 1
-            args.insert(1, [ch[x] for x in f])
+            args.insert(1, [_ch(x) for x in f])
         elif m is CBLinear:
             c2 = args[0]
-            c1 = ch[f]
+            c1 = _ch(f)
             args = [c1, c2, *args[1:]]
         elif m is CBFuse:
-            c2 = ch[f[-1]]
+            c2 = _ch(f[-1])
         elif m in frozenset({TorchVision, Index}):
             c2 = args[0]
-            c1 = ch[f]
+            c1 = _ch(f)
             args = [*args[1:]]
         else:
-            c2 = ch[f]
+            c2 = _ch(f)
 
         m_ = torch.nn.Sequential(*(m(*args) for _ in range(n))) if n > 1 else m(*args)  # module
         t = str(m)[8:-2].replace("__main__.", "")  # module type

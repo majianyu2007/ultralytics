@@ -55,7 +55,7 @@ class DualStreamTransformerDetectionModel(DetectionModel):
             if m.f != -1:
                 if isinstance(m.f, int):
                     if m.f == -4:
-                        x = m(x2)
+                        x = x2
                     else:
                         x = y[m.f]
                 else:

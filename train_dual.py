@@ -46,6 +46,8 @@ def parse_args():
                        help='动量')
     parser.add_argument('--weight-decay', type=float, default=0.0005,
                        help='权重衰减')
+    parser.add_argument('--optimizer', type=str, default='auto',
+                       help='优化器 (auto, SGD, Adam, AdamW, RMSProp)')
 
     # 数据增强
     parser.add_argument('--hsv-h', type=float, default=0.015,
@@ -124,6 +126,7 @@ def main():
         'lr0': args.lr0,
         'momentum': args.momentum,
         'weight_decay': args.weight_decay,
+        'optimizer': args.optimizer,
         'hsv_h': args.hsv_h,
         'hsv_s': args.hsv_s,
         'hsv_v': args.hsv_v,

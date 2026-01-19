@@ -289,6 +289,17 @@ class DualStreamDetectionTrainer(BaseTrainer):
             _callbacks=self.callbacks
         )
 
+    def label_loss_items(self, loss_items: list[float] | torch.Tensor | None = None, prefix: str = "train"):
+        """Return a loss dict with labeled training loss items tensor."""
+        keys = [f"{prefix}/{x}" for x in self.loss_names]
+        if loss_items is not None:
+            if isinstance(loss_items, torch.Tensor):
+                loss_items = loss_items.detach().cpu().flatten().tolist()
+            loss_items = [round(float(x), 5) for x in loss_items]
+            return dict(zip(keys, loss_items))
+        else:
+            return keys
+
     def plot_training_samples(self, batch: dict[str, Any], ni: int) -> None:
         """
         绘制训练样本，分别显示RGB和IR图像

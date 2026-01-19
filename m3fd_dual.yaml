@@ -1,0 +1,16 @@
+# M3FD dual-stream dataset (subset for quick validation)
+path: /home/mjy/project/ultralytics/Datasets/M3FD_split
+
+rgb_train: rgb/train
+rgb_val: rgb/val
+ir_train: ir/train
+ir_val: ir/val
+
+train: rgb/train
+val: rgb/val
+
+labels_train: labels/train
+labels_val: labels/val
+
+nc: 6
+names: ['Bus', 'Car', 'Lamp', 'Motorcycle', 'People', 'Truck']
