@@ -2,21 +2,24 @@
 # 用于RGB + IR多模态目标检测
 
 # 数据集路径配置
-# RGB图像路径
-rgb_train: /path/to/dataset/rgb/train/images
-rgb_val: /path/to/dataset/rgb/val/images
+# 数据集根目录（可选，推荐配置）
+path: /path/to/dataset
 
-# IR图像路径
-ir_train: /path/to/dataset/ir/train/images
-ir_val: /path/to/dataset/ir/val/images
+# RGB图像路径（相对path或绝对路径）
+rgb_train: rgb/train/images
+rgb_val: rgb/val/images
+
+# IR图像路径（相对path或绝对路径）
+ir_train: ir/train/images
+ir_val: ir/val/images
 
 # 兼容Ultralytics的数据路径（保持为RGB图像路径）
-train: /path/to/dataset/rgb/train/images
-val: /path/to/dataset/rgb/val/images
+train: rgb/train/images
+val: rgb/val/images
 
 # 可选：标签路径（RGB和IR共享同一套标签）
-labels_train: /path/to/dataset/labels/train
-labels_val: /path/to/dataset/labels/val
+labels_train: labels/train
+labels_val: labels/val
 
 # 类别数
 nc: 80

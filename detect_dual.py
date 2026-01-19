@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from ultralytics.nn.dual_tasks import DualStreamDetectionModel
 from ultralytics.utils import LOGGER
+from ultralytics.utils.torch_utils import select_device
 from ultralytics.utils.plotting import Annotator, colors
 
 
@@ -219,7 +220,7 @@ def main():
         sys.exit(1)
 
     # 设置设备
-    device = torch.device(args.device if args.device else ('cuda:0' if torch.cuda.is_available() else 'cpu'))
+    device = select_device(args.device)
     LOGGER.info(f"使用设备: {device}")
 
     # 创建保存目录

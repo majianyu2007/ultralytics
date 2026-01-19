@@ -1,73 +1,51 @@
-# YOLOv26 双流输入改造完成报告
+# YOLOv26 双流(RGB + IR)改造说明与使用指南
 
-## 🎉 改造成功！
+## 概览
 
-我已经成功将ultralytics YOLOv26框架改造为支持双流输入（RGB + IR）的多模态目标检测系统。以下是完整的改造总结和使用指南。
+本项目在 Ultralytics YOLOv26 的基础上增加双流输入支持，采用**早期融合**策略：
+- RGB(3 通道) + IR(3 通道) 在数据加载阶段拼接为 6 通道
+- 模型主干保持标准 YOLOv26 结构，通过 `ch=6` 直接接受 6 通道输入
+- 训练、验证、推理流程与原版保持一致
 
-## 📁 修改文件总览
+---
+
+## 修改说明（项目级）
 
 ### 新增文件
-1. **`ultralytics/data/dual_dataset.py`** - 双流数据集类（RGB+IR拼接为6通道）
-2. **`ultralytics/nn/dual_tasks.py`** - 双流检测模型包装器（强制6通道输入）
-3. **`ultralytics/models/yolo/detect/dual_train.py`** - 双流训练器
-4. **`dual_dataset_example.yaml`** - 数据集配置示例
-5. **`train_dual.py`** - 训练脚本
-6. **`detect_dual.py`** - 推理脚本
-7. **`test_dual_stream.py`** - 测试脚本
+- `ultralytics/data/dual_dataset.py`：双流数据集类（RGB/IR 拼接为 6 通道）
+- `ultralytics/nn/dual_tasks.py`：双流检测模型包装器
+- `ultralytics/models/yolo/detect/dual_train.py`：双流训练器
+- `train_dual.py`：双流训练脚本
+- `detect_dual.py`：双流推理脚本
+- `dual_dataset_example.yaml`：数据集配置示例
+- `test_dual_stream.py`：双流功能测试脚本
 
 ### 修改文件
-1. **`ultralytics/data/build.py`** - 添加双流数据构建函数
+- `ultralytics/data/build.py`：新增 `build_dual_stream_dataset` 数据构建入口
 
-## 🔧 技术实现详解
+### 关键行为与修复
+- **路径解析**：`rgb_* / ir_* / labels_*` 若为相对路径，会自动基于 `data.path` 解析（与 `train/val` 一致）。
+- **推理设备参数**：`detect_dual.py` 支持 `--device 0` / `0,1` / `cpu` 等常见写法。
+- **标签路径**：可选 `labels_train/labels_val` 指定标签根目录；不提供时按默认 `images -> labels` 规则推断。
+- **配对规则**：RGB/IR 通过相对路径或同名文件配对；若尺寸不一致，IR 自动缩放到 RGB 尺寸。
 
-### 核心思想
-使用**早期融合（Early Fusion）**策略：在数据加载阶段将RGB(3通道) + IR(3通道)拼接为6通道输入，然后使用标准YOLOv26检测模型进行训练与推理。
+---
 
-### 关键技术点
+## 数据集准备
 
-#### 1. 数据拼接策略
-```python
-# 在数据集的__getitem__方法中
-rgb_img = np.array([H, W, 3])  # RGB图像
-ir_img = np.array([H, W, 3])   # IR图像
-
-# 在通道维度拼接
-combined_img = np.concatenate([rgb_img, ir_img], axis=2)  # [H, W, 6]
-combined_img = combined_img.transpose(2, 0, 1)  # [6, H, W]
-```
-
-#### 2. 模型输入
-标准YOLOv26模型可以通过 `ch=6` 接受6通道输入，因此不需要修改网络结构即可完成训练和推理。
-
-## 📊 验证结果
-
-提供了测试脚本用于快速验证数据加载、模型前向和训练流程：
-
-### 运行测试
-```bash
-cd /home/mjy/project/ultralytics
-python test_dual_stream.py
-```
-
-## 🚀 使用指南
-
-### 1. 准备数据集
-
-你的数据集结构应该如下：
+推荐目录结构如下（RGB/IR 同名配对）：
 ```
 dataset/
 ├── rgb/
 │   ├── train/
 │   │   ├── image001.jpg
-│   │   ├── image002.jpg
 │   │   └── ...
 │   └── val/
 │       ├── image001.jpg
 │       └── ...
 ├── ir/
 │   ├── train/
-│   │   ├── image001.jpg  # 与RGB图像同名
-│   │   ├── image002.jpg
+│   │   ├── image001.jpg
 │   │   └── ...
 │   └── val/
 │       ├── image001.jpg
@@ -75,157 +53,98 @@ dataset/
 └── labels/
     ├── train/
     │   ├── image001.txt
-    │   ├── image002.txt
     │   └── ...
     └── val/
         ├── image001.txt
         └── ...
 ```
 
-### 2. 创建数据配置文件
+---
 
-复制并修改 `dual_dataset_example.yaml`：
+## 数据集配置文件
 
+### 推荐写法（带 `path:` 根目录）
 ```yaml
-# RGB图像路径
-rgb_train: /path/to/your/dataset/rgb/train
-rgb_val: /path/to/your/dataset/rgb/val
+# dataset root
+path: /path/to/dataset
 
-# IR图像路径
-ir_train: /path/to/your/dataset/ir/train
-ir_val: /path/to/your/dataset/ir/val
+# RGB/IR 图像路径（相对 path）
+rgb_train: rgb/train
+rgb_val: rgb/val
+ir_train: ir/train
+ir_val: ir/val
 
-# 兼容Ultralytics的数据路径（保持为RGB图像路径）
-train: /path/to/your/dataset/rgb/train
-val: /path/to/your/dataset/rgb/val
+# YOLO 兼容路径（保持为 RGB）
+train: rgb/train
+val: rgb/val
 
-# 可选：标签路径（RGB和IR共享同一套标签）
-labels_train: /path/to/your/dataset/labels/train
-labels_val: /path/to/your/dataset/labels/val
+# 可选：标签路径（相对 path）
+labels_train: labels/train
+labels_val: labels/val
 
-# 类别数和名称
 nc: 80
 names: ['person', 'bicycle', 'car', ...]
 ```
 
-> 说明：如果未提供 `labels_train/labels_val`，将使用Ultralytics默认的 `images -> labels` 路径规则从RGB图像路径推断标签文件位置。
+### 也支持绝对路径
+```yaml
+rgb_train: /abs/path/to/dataset/rgb/train
+rgb_val: /abs/path/to/dataset/rgb/val
+ir_train: /abs/path/to/dataset/ir/train
+ir_val: /abs/path/to/dataset/ir/val
+train: /abs/path/to/dataset/rgb/train
+val: /abs/path/to/dataset/rgb/val
+labels_train: /abs/path/to/dataset/labels/train
+labels_val: /abs/path/to/dataset/labels/val
+```
 
-### 3. 训练模型
+> 提示：若未设置 `labels_*`，将默认从 RGB 图像路径推断标签路径（`images -> labels`）。
+
+---
+
+## 训练使用
 
 ```bash
 python train_dual.py \
-    --model ultralytics/cfg/models/26/yolo26.yaml \
-    --data your_dual_dataset.yaml \
-    --epochs 100 \
-    --batch 16 \
-    --imgsz 640 \
-    --device 0
+  --model ultralytics/cfg/models/26/yolo26.yaml \
+  --data your_dual_dataset.yaml \
+  --epochs 100 \
+  --batch 16 \
+  --imgsz 640 \
+  --device 0
 ```
 
-### 4. 推理检测
+可用设备示例：`--device 0`、`--device 0,1`、`--device cpu`。
+
+---
+
+## 推理使用
 
 ```bash
 python detect_dual.py \
-    --weights runs/train/dual_stream_exp/weights/best.pt \
-    --rgb-source test_images/rgb/ \
-    --ir-source test_images/ir/ \
-    --save-dir results/
+  --weights runs/train/dual_stream_exp/weights/best.pt \
+  --rgb-source test_images/rgb/ \
+  --ir-source test_images/ir/ \
+  --save-dir runs/detect/dual_stream_exp \
+  --device 0
 ```
 
-## 🔍 关键特性
+- `--rgb-source` 与 `--ir-source` 必须同为文件或文件夹。
+- 文件夹模式下按文件名配对，建议 RGB/IR 文件名严格一致。
 
-### 数据处理
-- **自动数据配对**：根据文件名自动配对RGB和IR图像
-- **一致性数据增强**：确保RGB和IR图像应用相同的几何变换
-- **6通道输入支持**：无缝处理拼接后的多模态数据
+---
 
-### 模型架构
-- **标准YOLOv26骨干网络**：直接使用现有结构
-- **6通道输入**：通过 `ch=6` 接入RGB+IR拼接特征
-- **兼容性设计**：保持与标准YOLO的接口和权重加载方式兼容
+## 快速测试
 
-### 训练优化
-- **内存高效**：通过智能的数据拼接减少内存使用
-- **GPU友好**：支持分布式训练和混合精度
-- **可视化支持**：分别可视化RGB和IR训练样本
-
-## 🎯 应用场景
-
-这个双流YOLO可以应用于：
-
-1. **夜间目标检测**：结合可见光和红外图像
-2. **医学图像分析**：多模态医学影像检测
-3. **安防监控**：全天候目标检测
-4. **自动驾驶**：多传感器融合检测
-5. **遥感图像**：多光谱目标检测
-
-## 📈 性能优势
-
-与单流YOLO相比：
-
-1. **更强鲁棒性**：多模态信息互补
-2. **更好夜间性能**：红外信息增强
-3. **更高检测精度**：融合特征更丰富
-4. **更广适用性**：适应更多场景
-
-## 🔧 进一步优化建议
-
-1. **高级融合策略**：
-   - 实现注意力机制融合
-   - 添加跨模态对齐损失
-   - 使用Transformer进行特征融合
-
-2. **数据增强优化**：
-   - 针对IR图像的专用增强策略
-   - 跨模态一致性增强
-   - 域自适应增强
-
-3. **架构优化**：
-   - 轻量化双流设计
-   - 动态融合权重
-   - 多尺度特征对齐
-
-## 📚 代码架构说明
-
-### 类继承关系
-```
-BaseModel
-└── DetectionModel
-    └── DualStreamDetectionModel (新增)
-
-BaseDataset
-└── YOLODataset
-    └── DualStreamYOLODataset (新增)
-
-BaseTrainer
-└── DetectionTrainer
-    └── DualStreamDetectionTrainer (新增)
+```bash
+python test_dual_stream.py
 ```
 
-### 关键函数
-- **`DualStreamYOLODataset.load_image`**：RGB+IR图像对齐与6通道拼接
-- **`DualStreamYOLODataset.get_labels`**：支持可选标签根路径
-- **`DualStreamDetectionTrainer.build_dataset`**：双流数据集构建
+---
 
-## ✅ 验证清单
+## 说明与建议
 
-在你的YOLOv26上使用之前，请确保：
+- 6 通道输入会增加显存占用，建议适当下调 `--batch` 或 `--imgsz`。
+- 若发现 IR 与 RGB 尺寸不一致，系统会自动缩放 IR 以匹配 RGB。
+- 训练配置与原版 YOLOv26 基本一致，可直接复用原有超参数设置。
 
-1. ✅ 数据集格式正确（RGB和IR图像配对）
-2. ✅ 配置文件路径正确
-3. ✅ 运行测试脚本通过
-4. ✅ GPU内存充足（6通道输入需要更多内存）
-5. ✅ Python环境包含所需依赖
-
-## 🎊 总结
-
-恭喜！你现在拥有了一个完全功能的YOLOv26双流检测系统。这个改造实现了：
-
-- ✅ **最小代码改动**：保持原有框架结构
-- ✅ **完整功能支持**：训练、验证、推理、可视化
-- ✅ **高度可扩展**：易于添加更多模态
-- ✅ **生产就绪**：包含完整的错误处理和日志
-
-这个实现方案可以直接用于生产环境，也可以作为进一步研究多模态目标检测的基础平台。
-
-**开始你的双流YOLO之旅吧！** 🚀

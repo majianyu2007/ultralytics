@@ -11,6 +11,7 @@ from __future__ import annotations
 import math
 import random
 from copy import copy
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -77,12 +78,33 @@ class DualStreamDetectionTrainer(BaseTrainer):
             Dataset: 配置好的双流数据集
         """
         gs = max(int(unwrap_model(self.model).stride.max() if self.model else 0), 32)
+        data_root = Path(self.data.get("path")) if self.data and self.data.get("path") else None
+
+        def _resolve_path(value):
+            if value is None:
+                return value
+            if isinstance(value, (list, tuple)):
+                return [_resolve_path(v) for v in value]
+            p = Path(value)
+            if p.is_absolute() or data_root is None:
+                return str(p)
+            candidate = (data_root / p).resolve()
+            if not candidate.exists() and str(value).startswith("../"):
+                candidate = (data_root / str(value)[3:]).resolve()
+            return str(candidate)
 
         # 检查是否有双流数据路径配置
         if 'rgb_' + mode in self.data and 'ir_' + mode in self.data:
             # 双流模式：分别指定RGB和IR路径
-            rgb_path = self.data[f'rgb_{mode}']
-            ir_path = self.data[f'ir_{mode}']
+            rgb_key = f"rgb_{mode}"
+            ir_key = f"ir_{mode}"
+            labels_key = f"labels_{mode}"
+            rgb_path = _resolve_path(self.data[rgb_key])
+            ir_path = _resolve_path(self.data[ir_key])
+            self.data[rgb_key] = rgb_path
+            self.data[ir_key] = ir_path
+            if self.data.get(labels_key):
+                self.data[labels_key] = _resolve_path(self.data[labels_key])
 
             LOGGER.info(f"构建双流数据集 - RGB: {rgb_path}, IR: {ir_path}")
 
@@ -101,7 +123,6 @@ class DualStreamDetectionTrainer(BaseTrainer):
             LOGGER.warning("未找到双流数据配置 (rgb_train, ir_train 等)，尝试从标准路径推断...")
 
             # 假设标准路径下有rgb和ir子文件夹
-            from pathlib import Path
             base_path = Path(img_path)
             rgb_path = base_path / 'rgb'
             ir_path = base_path / 'ir'
