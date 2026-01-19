@@ -24,7 +24,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='YOLOv26双流模型训练')
 
     # 基本参数
-    parser.add_argument('--model', type=str, default='ultralytics/cfg/models/yolo26n-dual.yaml',
+    parser.add_argument('--model', type=str, default='ultralytics/cfg/models/26/yolo26.yaml',
                        help='模型配置文件路径')
     parser.add_argument('--data', type=str, required=True,
                        help='数据集配置文件路径')

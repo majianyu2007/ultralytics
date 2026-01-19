@@ -82,8 +82,10 @@ def create_dummy_data(output_dir="dummy_dual_data", num_images=10):
         'rgb_val': str(rgb_val_dir),
         'ir_train': str(ir_train_dir),
         'ir_val': str(ir_val_dir),
-        'train': str(labels_train_dir),
-        'val': str(labels_val_dir),
+        'train': str(rgb_train_dir),
+        'val': str(rgb_val_dir),
+        'labels_train': str(labels_train_dir),
+        'labels_val': str(labels_val_dir),
         'nc': 2,  # 2个类别用于测试
         'names': ['person', 'vehicle']
     }
@@ -111,7 +113,8 @@ def test_dual_stream_dataset():
             rgb_img_path="dummy_dual_data/rgb/train",
             ir_img_path="dummy_dual_data/ir/train",
             imgsz=640,
-            augment=False
+            augment=False,
+            label_path="dummy_dual_data/labels/train",
         )
 
         LOGGER.info(f"数据集大小: {len(dataset)}")
@@ -144,7 +147,7 @@ def test_dual_stream_model():
 
     try:
         # 创建双流模型
-        model = DualStreamDetectionModel(cfg="ultralytics/cfg/models/yolo26n-dual.yaml", ch=6, nc=2)
+        model = DualStreamDetectionModel(cfg="ultralytics/cfg/models/26/yolo26.yaml", ch=6, nc=2)
         model.eval()
 
         # 创建虚拟输入 (batch_size=2, channels=6, height=640, width=640)
@@ -187,7 +190,7 @@ def test_dual_stream_training():
 
         # 配置训练参数
         args = {
-            'model': 'ultralytics/cfg/models/yolo26n-dual.yaml',
+            'model': 'ultralytics/cfg/models/26/yolo26.yaml',
             'data': config_path,
             'epochs': 2,  # 只训练2个epoch用于测试
             'batch': 2,   # 小批次
@@ -290,7 +293,7 @@ def main():
         LOGGER.info("1. 准备你的双流数据集（RGB + IR图像对）")
         LOGGER.info("2. 创建数据配置文件，参考 dual_dataset_example.yaml")
         LOGGER.info("3. 使用以下命令训练:")
-        LOGGER.info("   python -c \"from dual_train import DualStreamDetectionTrainer; trainer = DualStreamDetectionTrainer(overrides={'model': 'ultralytics/cfg/models/yolo26n-dual.yaml', 'data': 'your_data.yaml', 'epochs': 100}); trainer.train()\"")
+        LOGGER.info("   python -c \"from dual_train import DualStreamDetectionTrainer; trainer = DualStreamDetectionTrainer(overrides={'model': 'ultralytics/cfg/models/26/yolo26.yaml', 'data': 'your_data.yaml', 'epochs': 100}); trainer.train()\"")
         LOGGER.info("4. 训练完成后，模型将自动保存")
 
     else:

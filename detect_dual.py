@@ -141,6 +141,10 @@ def preprocess_dual_image(rgb_img, ir_img, imgsz=640):
     Returns:
         torch.Tensor: 预处理后的6通道张量
     """
+    # 对齐大小
+    if rgb_img.shape[:2] != ir_img.shape[:2]:
+        ir_img = cv2.resize(ir_img, (rgb_img.shape[1], rgb_img.shape[0]), interpolation=cv2.INTER_LINEAR)
+
     # 调整大小
     h, w = rgb_img.shape[:2]
     r = imgsz / max(h, w)
@@ -226,7 +230,8 @@ def main():
         # 加载模型
         LOGGER.info(f"加载模型: {args.weights}")
         model = DualStreamDetectionModel()
-        model.load_state_dict(torch.load(args.weights, map_location=device)['model'])
+        weights = torch.load(args.weights, map_location=device)
+        model.load(weights)
         model = model.to(device)
         model.eval()
 

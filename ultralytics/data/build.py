@@ -279,6 +279,7 @@ def build_dual_stream_dataset(
     Returns:
         DualStreamYOLODataset: 双流数据集实例
     """
+    label_path = data.get(f"labels_{mode}")
     return DualStreamYOLODataset(
         rgb_img_path=rgb_img_path,
         ir_img_path=ir_img_path,
@@ -293,6 +294,10 @@ def build_dual_stream_dataset(
         pad=0.0 if mode == "train" else 0.5,
         single_cls=cfg.single_cls or False,
         classes=cfg.classes,
+        data=data,
+        task=cfg.task,
+        fraction=cfg.fraction if mode == "train" else 1.0,
+        label_path=label_path,
     )
 
 
