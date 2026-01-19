@@ -18,6 +18,7 @@ from torch.utils.data import Dataset, dataloader, distributed
 
 from ultralytics.cfg import IterableSimpleNamespace
 from ultralytics.data.dataset import GroundingDataset, YOLODataset, YOLOMultiModalDataset
+from ultralytics.data.dual_dataset import DualStreamYOLODataset
 from ultralytics.data.loaders import (
     LOADERS,
     LoadImagesAndVideos,
@@ -249,6 +250,49 @@ def build_yolo_dataset(
         classes=cfg.classes,
         data=data,
         fraction=cfg.fraction if mode == "train" else 1.0,
+    )
+
+
+def build_dual_stream_dataset(
+    cfg: IterableSimpleNamespace,
+    rgb_img_path: str,
+    ir_img_path: str,
+    batch: int,
+    data: dict[str, Any],
+    mode: str = "train",
+    rect: bool = False,
+    stride: int = 32,
+) -> Dataset:
+    """
+    构建双流YOLO数据集
+
+    Args:
+        cfg: 配置参数
+        rgb_img_path: RGB图像路径
+        ir_img_path: IR图像路径
+        batch: 批次大小
+        data: 数据集配置字典
+        mode: 模式 ('train' 或 'val')
+        rect: 是否使用矩形训练
+        stride: 模型步长
+
+    Returns:
+        DualStreamYOLODataset: 双流数据集实例
+    """
+    return DualStreamYOLODataset(
+        rgb_img_path=rgb_img_path,
+        ir_img_path=ir_img_path,
+        imgsz=cfg.imgsz,
+        cache=cfg.cache or None,
+        augment=mode == "train",
+        hyp=cfg,
+        prefix=colorstr(f"{mode}: "),
+        rect=cfg.rect or rect,
+        batch_size=batch,
+        stride=stride,
+        pad=0.0 if mode == "train" else 0.5,
+        single_cls=cfg.single_cls or False,
+        classes=cfg.classes,
     )
 
 
