@@ -7,14 +7,13 @@
 ## 📁 修改文件总览
 
 ### 新增文件
-1. **`ultralytics/data/dual_dataset.py`** - 双流数据集类
-2. **`ultralytics/nn/dual_tasks.py`** - 双流检测模型
+1. **`ultralytics/data/dual_dataset.py`** - 双流数据集类（RGB+IR拼接为6通道）
+2. **`ultralytics/nn/dual_tasks.py`** - 双流检测模型包装器（强制6通道输入）
 3. **`ultralytics/models/yolo/detect/dual_train.py`** - 双流训练器
-4. **`ultralytics/cfg/models/yolo26n-dual.yaml`** - 双流模型配置
-5. **`dual_dataset_example.yaml`** - 数据集配置示例
-6. **`train_dual.py`** - 训练脚本
-7. **`detect_dual.py`** - 推理脚本
-8. **`test_dual_stream.py`** - 测试脚本
+4. **`dual_dataset_example.yaml`** - 数据集配置示例
+5. **`train_dual.py`** - 训练脚本
+6. **`detect_dual.py`** - 推理脚本
+7. **`test_dual_stream.py`** - 测试脚本
 
 ### 修改文件
 1. **`ultralytics/data/build.py`** - 添加双流数据构建函数
@@ -22,7 +21,7 @@
 ## 🔧 技术实现详解
 
 ### 核心思想
-我采用了一个巧妙的设计：**在数据加载阶段将RGB(3通道) + IR(3通道)拼接为6通道输入，然后在模型内部分离处理两个流**。
+使用**早期融合（Early Fusion）**策略：在数据加载阶段将RGB(3通道) + IR(3通道)拼接为6通道输入，然后使用标准YOLOv26检测模型进行训练与推理。
 
 ### 关键技术点
 
@@ -37,33 +36,12 @@ combined_img = np.concatenate([rgb_img, ir_img], axis=2)  # [H, W, 6]
 combined_img = combined_img.transpose(2, 0, 1)  # [6, H, W]
 ```
 
-#### 2. 模型内部分流处理
-```python
-def predict(self, x):
-    # x的shape: (batch_size, 6, height, width)
-
-    # 分离RGB和IR流
-    rgb_stream = x[:, :3, :, :]  # 前3通道
-    ir_stream = x[:, 3:, :, :]   # 后3通道
-
-    # 分别处理并融合
-    return self._predict_dual_stream_once(rgb_stream, ir_stream)
-```
-
-#### 3. 多层特征融合
-- P3/8层级融合：低级特征融合
-- P4/16层级融合：中级特征融合
-- P5/32层级融合：高级特征融合
+#### 2. 模型输入
+标准YOLOv26模型可以通过 `ch=6` 接受6通道输入，因此不需要修改网络结构即可完成训练和推理。
 
 ## 📊 验证结果
 
-已创建完整的测试脚本验证所有功能：
-
-### 测试项目
-1. ✅ **6通道数据分离测试** - 验证数据正确分离
-2. ✅ **双流数据集加载测试** - 验证数据加载流程
-3. ✅ **双流模型推理测试** - 验证模型前向传播
-4. ✅ **双流训练流程测试** - 验证训练流程
+提供了测试脚本用于快速验证数据加载、模型前向和训练流程：
 
 ### 运行测试
 ```bash
@@ -117,19 +95,26 @@ rgb_val: /path/to/your/dataset/rgb/val
 ir_train: /path/to/your/dataset/ir/train
 ir_val: /path/to/your/dataset/ir/val
 
-# 标签路径
-train: /path/to/your/dataset/labels/train
-val: /path/to/your/dataset/labels/val
+# 兼容Ultralytics的数据路径（保持为RGB图像路径）
+train: /path/to/your/dataset/rgb/train
+val: /path/to/your/dataset/rgb/val
+
+# 可选：标签路径（RGB和IR共享同一套标签）
+labels_train: /path/to/your/dataset/labels/train
+labels_val: /path/to/your/dataset/labels/val
 
 # 类别数和名称
 nc: 80
 names: ['person', 'bicycle', 'car', ...]
 ```
 
+> 说明：如果未提供 `labels_train/labels_val`，将使用Ultralytics默认的 `images -> labels` 路径规则从RGB图像路径推断标签文件位置。
+
 ### 3. 训练模型
 
 ```bash
 python train_dual.py \
+    --model ultralytics/cfg/models/26/yolo26.yaml \
     --data your_dual_dataset.yaml \
     --epochs 100 \
     --batch 16 \
@@ -155,9 +140,9 @@ python detect_dual.py \
 - **6通道输入支持**：无缝处理拼接后的多模态数据
 
 ### 模型架构
-- **双流backbone**：分别处理RGB和IR特征
-- **多层级融合**：在不同尺度进行特征融合
-- **兼容性设计**：保持与标准YOLO的接口兼容
+- **标准YOLOv26骨干网络**：直接使用现有结构
+- **6通道输入**：通过 `ch=6` 接入RGB+IR拼接特征
+- **兼容性设计**：保持与标准YOLO的接口和权重加载方式兼容
 
 ### 训练优化
 - **内存高效**：通过智能的数据拼接减少内存使用
@@ -218,8 +203,8 @@ BaseTrainer
 ```
 
 ### 关键函数
-- **`DualStreamYOLODataset.__getitem__`**：6通道数据拼接
-- **`DualStreamDetectionModel.predict`**：双流分离处理
+- **`DualStreamYOLODataset.load_image`**：RGB+IR图像对齐与6通道拼接
+- **`DualStreamYOLODataset.get_labels`**：支持可选标签根路径
 - **`DualStreamDetectionTrainer.build_dataset`**：双流数据集构建
 
 ## ✅ 验证清单

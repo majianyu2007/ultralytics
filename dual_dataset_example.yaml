@@ -10,9 +10,13 @@ rgb_val: /path/to/dataset/rgb/val/images
 ir_train: /path/to/dataset/ir/train/images
 ir_val: /path/to/dataset/ir/val/images
 
-# 标签路径（通常RGB和IR共享相同的标签）
-train: /path/to/dataset/labels/train
-val: /path/to/dataset/labels/val
+# 兼容Ultralytics的数据路径（保持为RGB图像路径）
+train: /path/to/dataset/rgb/train/images
+val: /path/to/dataset/rgb/val/images
+
+# 可选：标签路径（RGB和IR共享同一套标签）
+labels_train: /path/to/dataset/labels/train
+labels_val: /path/to/dataset/labels/val
 
 # 类别数
 nc: 80
