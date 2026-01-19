@@ -8,9 +8,21 @@
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from ultralytics.nn.tasks import DetectionModel, BaseModel, yaml_model_load, attempt_load_weights
 from ultralytics.utils import LOGGER
 from ultralytics.nn.modules import Conv, Concat
+
+# 导入检测头类型
+try:
+    from ultralytics.nn.modules import Detect
+except ImportError:
+    Detect = None
+
+try:
+    from ultralytics.nn.modules import Segment, Pose, OBB
+except ImportError:
+    Segment = Pose = OBB = None
 
 
 class DualStreamDetectionModel(DetectionModel):
@@ -176,7 +188,8 @@ class DualStreamDetectionModel(DetectionModel):
         # 示例规则：
 
         # 检测头通常是最后的层
-        if isinstance(module, (Detect, YOLOEDetect, v10Detect, Segment, Pose, OBB)):
+        detect_types = tuple(filter(None, [Detect, Segment, Pose, OBB]))
+        if detect_types and isinstance(module, detect_types):
             return 'final'
 
         # 前几层分别处理RGB和IR
@@ -202,23 +215,9 @@ class DualStreamDetectionModel(DetectionModel):
         Returns:
             torch.Tensor: 增强推理结果
         """
-        # 实现双流的增强推理
-        img_size = rgb_x.shape[-2:]  # height, width
-        s = [1, 0.83, 0.67]  # scales
-        f = [None, 3, None]  # flips (2-ud, 3-lr)
-        y = []  # outputs
-
-        for si, fi in zip(s, f):
-            # 对RGB和IR应用相同的变换
-            xi_rgb = scale_img(rgb_x.flip(fi) if fi else rgb_x, si)
-            xi_ir = scale_img(ir_x.flip(fi) if fi else ir_x, si)
-
-            yi = self._predict_dual_stream_once(xi_rgb, xi_ir, profile, visualize, embed)
-            yi = self._descale_pred(yi, fi, si, img_size)
-            y.append(yi)
-
-        y = self._clip_augmented(y)  # clip augmented tails
-        return torch.cat(y, 1)
+        # 简化实现：目前不支持增强推理，直接调用普通推理
+        LOGGER.warning("双流模型的增强推理功能尚未完全实现，使用普通推理")
+        return self._predict_dual_stream_once(rgb_x, ir_x, profile, visualize, embed)
 
 
 class DualStreamFusion(nn.Module):

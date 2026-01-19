@@ -151,10 +151,14 @@ class DualStreamYOLODataset(BaseDataset):
             tuple: (rgb_image, ir_image, label_dict, image_path)
         """
         # 加载RGB图像
-        rgb_img = self.load_image(i, rgb=True)
+        rgb_img, (h0_rgb, w0_rgb), (h_rgb, w_rgb) = self.load_image(i, rgb=True)
 
         # 加载IR图像
-        ir_img = self.load_image(i, rgb=False)
+        ir_img, (h0_ir, w0_ir), (h_ir, w_ir) = self.load_image(i, rgb=False)
+
+        # 验证尺寸一致性
+        if (h_rgb, w_rgb) != (h_ir, w_ir):
+            raise ValueError(f"RGB和IR图像尺寸不一致: RGB={h_rgb}x{w_rgb}, IR={h_ir}x{w_ir}")
 
         # 加载标签（基于RGB图像路径）
         label = self.labels[i].copy()
@@ -224,21 +228,30 @@ class DualStreamYOLODataset(BaseDataset):
         对RGB和IR图像应用相同的几何变换，确保一致性
 
         Args:
-            rgb_img: RGB图像
-            ir_img: IR图像
+            rgb_img: RGB图像 (H, W, 3)
+            ir_img: IR图像 (H, W, 3)
             label: 标签信息
 
         Returns:
             tuple: 增强后的(rgb_img, ir_img, label)
         """
-        # 这里可以实现具体的数据增强逻辑
+        import random
+        
         # 重要：RGB和IR图像必须应用相同的几何变换！
-
-        # 示例：应用相同的旋转、翻转等变换
-        if self.augment and hasattr(self, 'transforms'):
-            # 确保对两个图像应用相同的变换
-            pass
-
+        if not self.augment:
+            return rgb_img, ir_img, label
+        
+        # 随机水平翻转
+        if random.random() < 0.5:
+            rgb_img = np.fliplr(rgb_img).copy()
+            ir_img = np.fliplr(ir_img).copy()
+            # 更新标签中的边界框
+            if 'bboxes' in label and len(label['bboxes']) > 0:
+                label['bboxes'][:, 0] = 1 - label['bboxes'][:, 0]  # 翻转 x 坐标
+        
+        # 可以添加更多增强，但必须同时应用于 RGB 和 IR
+        # 例如：旋转、缩放、裁剪等
+        
         return rgb_img, ir_img, label
 
     def update_labels_info(self):
@@ -252,28 +265,39 @@ class DualStreamYOLODataset(BaseDataset):
     def collate_fn(batch):
         """数据加载器的整理函数"""
         new_batch = {}
-        for k in batch[0].keys():
-            if k == "img":
-                new_batch[k] = torch.stack([b[k] for b in batch], 0)
-            elif k in {"cls", "bboxes"}:
-                new_batch[k] = torch.cat([b[k] for b in batch], 0) if len(batch[0][k]) else torch.empty(0)
-            else:
+        keys = batch[0].keys()
+        
+        # 堆叠图像
+        new_batch["img"] = torch.stack([b["img"] for b in batch], 0)
+        
+        # 处理标签：需要为每个样本添加批次索引
+        batch_idx = []
+        all_cls = []
+        all_bboxes = []
+        
+        for i, b in enumerate(batch):
+            n_objects = len(b.get("cls", []))
+            if n_objects > 0:
+                batch_idx.extend([i] * n_objects)
+                all_cls.append(b["cls"])
+                all_bboxes.append(b["bboxes"])
+        
+        if len(all_cls) > 0:
+            new_batch["batch_idx"] = torch.tensor(batch_idx, dtype=torch.long)
+            new_batch["cls"] = torch.cat(all_cls, 0)
+            new_batch["bboxes"] = torch.cat(all_bboxes, 0)
+        else:
+            new_batch["batch_idx"] = torch.empty(0, dtype=torch.long)
+            new_batch["cls"] = torch.empty(0)
+            new_batch["bboxes"] = torch.empty(0, 4)
+        
+        # 处理其他字段
+        for k in keys:
+            if k not in {"img", "cls", "bboxes"}:
                 new_batch[k] = [b[k] for b in batch]
-
-        # 添加批次索引到标签
-        for i, (cls, bbox) in enumerate(zip(new_batch["cls"], new_batch["bboxes"])):
-            if len(cls):
-                new_batch["cls"][new_batch["cls"] == cls] = i
 
         return new_batch
 
 
-# 保持原有的YOLODataset类以确保兼容性
-class YOLODataset(BaseDataset):
-    """Dataset class for loading object detection and/or segmentation labels in YOLO format.
-
-    保持原有功能不变...
-    """
-    # 这里保持原有YOLODataset的完整实现
-    # [原始代码太长，这里省略，实际使用时需要包含完整的原始YOLODataset实现]
-    pass
+# 注意: 原有的 YOLODataset 类在 ultralytics.data.dataset 模块中
+# 这里不重新定义，避免破坏原有功能
