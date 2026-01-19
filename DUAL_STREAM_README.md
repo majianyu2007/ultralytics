@@ -116,6 +116,21 @@ python train_dual.py \
 
 可用设备示例：`--device 0`、`--device 0,1`、`--device cpu`。
 
+### Transformer 融合训练
+
+使用双流 Transformer 融合模型：
+```bash
+python train_dual.py \
+  --model ultralytics/cfg/models/26/yolo26-dual-transformer.yaml \
+  --data your_dual_dataset.yaml \
+  --epochs 100 \
+  --batch 16 \
+  --imgsz 640 \
+  --device 0
+```
+
+该模型会将 6 通道输入拆分为 RGB/IR 两个 3 通道流，并在多个尺度使用 GPT 模块进行特征融合。
+
 ---
 
 ## 推理使用
@@ -123,6 +138,17 @@ python train_dual.py \
 ```bash
 python detect_dual.py \
   --weights runs/train/dual_stream_exp/weights/best.pt \
+  --rgb-source test_images/rgb/ \
+  --ir-source test_images/ir/ \
+  --save-dir runs/detect/dual_stream_exp \
+  --device 0
+```
+
+如果使用 Transformer 融合模型，建议显式传入 `--model`：
+```bash
+python detect_dual.py \
+  --weights runs/train/dual_stream_exp/weights/best.pt \
+  --model ultralytics/cfg/models/26/yolo26-dual-transformer.yaml \
   --rgb-source test_images/rgb/ \
   --ir-source test_images/ir/ \
   --save-dir runs/detect/dual_stream_exp \
@@ -147,4 +173,3 @@ python test_dual_stream.py
 - 6 通道输入会增加显存占用，建议适当下调 `--batch` 或 `--imgsz`。
 - 若发现 IR 与 RGB 尺寸不一致，系统会自动缩放 IR 以匹配 RGB。
 - 训练配置与原版 YOLOv26 基本一致，可直接复用原有超参数设置。
-

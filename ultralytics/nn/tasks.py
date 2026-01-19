@@ -28,6 +28,8 @@ from ultralytics.nn.modules import (
     A2C2f,
     AConv,
     ADown,
+    Add,
+    Add2,
     Bottleneck,
     BottleneckCSP,
     C2f,
@@ -71,6 +73,7 @@ from ultralytics.nn.modules import (
     YOLOEDetect,
     YOLOESegment,
     YOLOESegment26,
+    GPT,
     v10Detect,
 )
 from ultralytics.utils import DEFAULT_CFG_DICT, LOGGER, YAML, colorstr, emojis
@@ -1652,6 +1655,18 @@ def parse_model(d, ch, verbose=True):
             args = [ch[f]]
         elif m is Concat:
             c2 = sum(ch[x] for x in f)
+        elif m is Add:
+            f0 = f[0] if isinstance(f, list) else f
+            c2 = ch[f0]
+            args = [c2]
+        elif m is Add2:
+            f0 = f[0] if isinstance(f, list) else f
+            c2 = ch[f0]
+            args = [c2, args[1]]
+        elif m is GPT:
+            f0 = f[0] if isinstance(f, list) else f
+            c2 = ch[f0]
+            args = [c2]
         elif m in frozenset(
             {
                 Detect,

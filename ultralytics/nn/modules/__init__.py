@@ -76,6 +76,7 @@ from .conv import (
     RepConv,
     SpatialAttention,
 )
+from .dual_fusion import Add, Add2, GPT, SelfAttention
 from .head import (
     OBB,
     OBB26,
@@ -127,6 +128,8 @@ __all__ = (
     "A2C2f",
     "AConv",
     "ADown",
+    "Add",
+    "Add2",
     "Attention",
     "BNContrastiveHead",
     "Bottleneck",
@@ -159,6 +162,7 @@ __all__ = (
     "HGStem",
     "ImagePoolingAttn",
     "Index",
+    "GPT",
     "LRPCHead",
     "LayerNorm2d",
     "LightConv",
@@ -177,6 +181,7 @@ __all__ = (
     "SCDown",
     "Segment",
     "Segment26",
+    "SelfAttention",
     "SpatialAttention",
     "TorchVision",
     "TransformerBlock",

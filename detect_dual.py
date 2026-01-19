@@ -21,7 +21,8 @@ from PIL import Image
 # 添加项目路径
 sys.path.insert(0, str(Path(__file__).parent))
 
-from ultralytics.nn.dual_tasks import DualStreamDetectionModel
+from ultralytics.nn.dual_tasks import DualStreamDetectionModel, DualStreamTransformerDetectionModel
+from ultralytics.nn.tasks import yaml_model_load
 from ultralytics.utils import LOGGER
 from ultralytics.utils.torch_utils import select_device
 from ultralytics.utils.plotting import Annotator, colors
@@ -34,6 +35,8 @@ def parse_args():
     # 输入参数
     parser.add_argument('--weights', type=str, required=True,
                        help='模型权重文件路径')
+    parser.add_argument('--model', type=str, default='',
+                       help='模型配置文件路径（用于双流Transformer融合）')
     parser.add_argument('--rgb-source', type=str, required=True,
                        help='RGB图像路径（文件夹或单个图像）')
     parser.add_argument('--ir-source', type=str, required=True,
@@ -230,8 +233,29 @@ def main():
     try:
         # 加载模型
         LOGGER.info(f"加载模型: {args.weights}")
-        model = DualStreamDetectionModel()
         weights = torch.load(args.weights, map_location=device)
+
+        cfg_for_model = args.model if args.model else None
+        if not cfg_for_model and isinstance(weights, dict):
+            model_obj = weights.get("model")
+            if hasattr(model_obj, "yaml"):
+                cfg_for_model = model_obj.yaml
+
+        use_transformer = False
+        if isinstance(cfg_for_model, dict):
+            use_transformer = cfg_for_model.get("dual_fusion") == "transformer"
+        elif cfg_for_model:
+            try:
+                cfg_for_model = yaml_model_load(cfg_for_model)
+                use_transformer = cfg_for_model.get("dual_fusion") == "transformer"
+            except Exception:
+                pass
+
+        if use_transformer:
+            model = DualStreamTransformerDetectionModel(cfg_for_model, ch=3)
+        else:
+            model = DualStreamDetectionModel(cfg_for_model or "ultralytics/cfg/models/26/yolo26.yaml", ch=6)
+
         model.load(weights)
         model = model.to(device)
         model.eval()

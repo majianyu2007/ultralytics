@@ -22,7 +22,8 @@ from ultralytics.data import build_dataloader
 from ultralytics.data.build import build_dual_stream_dataset
 from ultralytics.engine.trainer import BaseTrainer
 from ultralytics.models import yolo
-from ultralytics.nn.dual_tasks import DualStreamDetectionModel
+from ultralytics.nn.dual_tasks import DualStreamDetectionModel, DualStreamTransformerDetectionModel
+from ultralytics.nn.tasks import yaml_model_load
 from ultralytics.utils import DEFAULT_CFG, LOGGER, RANK
 from ultralytics.utils.patches import override_configs
 from ultralytics.utils.plotting import plot_images, plot_labels
@@ -244,13 +245,31 @@ class DualStreamDetectionTrainer(BaseTrainer):
         Returns:
             DualStreamDetectionModel: 双流检测模型
         """
-        # 强制设置为6通道输入
-        model = DualStreamDetectionModel(
-            cfg,
-            nc=self.data["nc"],
-            ch=6,  # RGB 3 + IR 3
-            verbose=verbose and RANK == -1
-        )
+        cfg_for_model = cfg
+        use_transformer = False
+        if isinstance(cfg, dict):
+            use_transformer = cfg.get("dual_fusion") == "transformer"
+        elif isinstance(cfg, (str, Path)) and str(cfg).endswith((".yaml", ".yml")):
+            try:
+                cfg_for_model = yaml_model_load(cfg)
+                use_transformer = cfg_for_model.get("dual_fusion") == "transformer"
+            except Exception:
+                cfg_for_model = cfg
+
+        if use_transformer:
+            model = DualStreamTransformerDetectionModel(
+                cfg_for_model,
+                nc=self.data["nc"],
+                ch=3,
+                verbose=verbose and RANK == -1,
+            )
+        else:
+            model = DualStreamDetectionModel(
+                cfg_for_model,
+                nc=self.data["nc"],
+                ch=6,  # RGB 3 + IR 3
+                verbose=verbose and RANK == -1,
+            )
 
         if weights:
             model.load(weights)
